@@ -33,6 +33,68 @@
             background-color: rgba(255,255,255,.4) !important;
             padding: 2px !important;
         } 
+        /* ========================= */
+/* PANEL PERSONALIZADO */
+/* ========================= */
+
+#panelFiltro {
+
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+
+    z-index: 1000;
+
+    background: white;
+
+    padding: 12px;
+
+    border-radius: 8px;
+
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+
+    font-family: Arial, sans-serif;
+
+    font-size: 13px;
+}
+
+#panelFiltro select {
+
+    width: 260px;
+
+    padding: 5px;
+
+    margin-top: 5px;
+
+    margin-bottom: 10px;
+}
+
+#panelFiltro button {
+
+    padding: 6px 10px;
+
+    border: none;
+
+    border-radius: 4px;
+
+    cursor: pointer;
+
+    margin-right: 5px;
+}
+
+#btnFiltrar {
+
+    background-color: #1976d2;
+
+    color: white;
+}
+
+#btnDescargar {
+
+    background-color: #388e3c;
+
+    color: white;
+}
         </style>
 
         <style>
@@ -45,6 +107,198 @@
         </style>
         <title>Actualización de Cobertura de Imágenes Satelitales OneAtlas 2026</title>
     </head>
+    <!-- ========================= -->
+<!-- FUNCIONES PERSONALIZADAS -->
+<!-- ========================= -->
+
+<script>
+
+    // =========================================
+    // LIMPIAR NOMBRE DE CAPA
+    // =========================================
+
+    function limpiarNombreCapa(nombre) {
+
+        var temp = document.createElement("div");
+
+        temp.innerHTML = nombre;
+
+        var texto = temp.textContent || temp.innerText || "";
+
+        texto = texto
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return texto;
+    }
+
+    // =========================================
+    // IDENTIFICAR MAPAS BASE
+    // =========================================
+
+    function esMapaBase(nombre) {
+
+        nombre = nombre.toLowerCase();
+
+        return (
+            nombre.includes("openstreetmap") ||
+            nombre.includes("esri topo") ||
+            nombre.includes("google satellite")
+        );
+    }
+
+    // =========================================
+    // CARGAR FECHAS EN SELECTOR
+    // =========================================
+
+    function cargarFechas() {
+
+        var selector = document.getElementById("selectorFecha");
+
+        selector.innerHTML = "";
+
+        function recorrerCapas(layer) {
+
+            if (layer.getLayers) {
+
+                layer.getLayers().forEach(recorrerCapas);
+
+            } else {
+
+                var nombre = layer.get('title');
+
+                if (!nombre) return;
+
+                nombre = limpiarNombreCapa(nombre);
+
+                if (esMapaBase(nombre)) return;
+
+                var option = document.createElement("option");
+
+                option.value = nombre;
+
+                option.text = nombre;
+
+                selector.appendChild(option);
+            }
+        }
+
+        map.getLayers().forEach(recorrerCapas);
+    }
+
+    // =========================================
+    // FILTRAR CAPAS
+    // =========================================
+
+    function filtrarPorFecha() {
+
+        var seleccion = document.getElementById("selectorFecha").value;
+
+        function recorrerCapas(layer) {
+
+            if (layer.getLayers) {
+
+                layer.getLayers().forEach(recorrerCapas);
+
+            } else {
+
+                var nombre = layer.get('title');
+
+                if (!nombre) return;
+
+                nombre = limpiarNombreCapa(nombre);
+
+                // mantener mapas base
+                if (esMapaBase(nombre)) return;
+
+                layer.setVisible(nombre === seleccion);
+            }
+        }
+
+        map.getLayers().forEach(recorrerCapas);
+    }
+
+    // =========================================
+    // DESCARGAR CAPA FILTRADA
+    // =========================================
+
+    function descargarPorFecha() {
+
+        var seleccion = document.getElementById("selectorFecha").value;
+
+        var formatoGeoJSON = new ol.format.GeoJSON();
+
+        var extent = map.getView().calculateExtent(map.getSize());
+
+        function recorrerCapas(layer) {
+
+            if (layer.getLayers) {
+
+                layer.getLayers().forEach(recorrerCapas);
+
+            } else {
+
+                var nombre = layer.get('title');
+
+                if (!nombre) return;
+
+                nombre = limpiarNombreCapa(nombre);
+
+                if (nombre !== seleccion) return;
+
+                var source = layer.getSource();
+
+                if (!source || !source.getFeaturesInExtent) return;
+
+                var features = source.getFeaturesInExtent(extent);
+
+                if (features.length === 0) {
+
+                    alert("No hay datos en el área visible");
+
+                    return;
+                }
+
+                var geojson = formatoGeoJSON.writeFeatures(features, {
+
+                    featureProjection: 'EPSG:3857',
+
+                    dataProjection: 'EPSG:4326'
+
+                });
+
+                var nombreArchivo = nombre.replace(/[<>:"/\\|?*]+/g, '');
+
+                var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(geojson);
+
+                var link = document.createElement('a');
+
+                link.setAttribute("href", dataStr);
+
+                link.setAttribute("download", nombreArchivo + ".geojson");
+
+                document.body.appendChild(link);
+
+                link.click();
+
+                link.remove();
+            }
+        }
+
+        map.getLayers().forEach(recorrerCapas);
+    }
+
+    // =========================================
+    // INICIALIZAR
+    // =========================================
+
+    window.addEventListener('load', function () {
+
+        cargarFechas();
+
+    });
+
+</script>
     <body>
         <div id="map">
             <div id="popup" class="ol-popup">
@@ -64,4 +318,23 @@
         <script src="./resources/Autolinker.min.js"></script>
         <script src="./resources/qgis2web.js"></script>        
     </body>
+    <!-- ========================= -->
+<!-- PANEL PERSONALIZADO -->
+<!-- ========================= -->
+
+<div id="panelFiltro">
+
+    <label><strong>Selecciona fecha:</strong></label><br>
+
+    <select id="selectorFecha"></select><br>
+
+    <button id="btnFiltrar" onclick="filtrarPorFecha()">
+        Mostrar fecha
+    </button>
+
+    <button id="btnDescargar" onclick="descargarPorFecha()">
+        Descargar
+    </button>
+
+</div>
 </html>
